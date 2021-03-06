@@ -4,11 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "rimraf build && tsc"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.8.0",
     "aws-sdk": "^2.858.0"
   },
   "devDependencies": {
