@@ -31,17 +31,16 @@ async function putUrl(from: string, to: string) {
   };
   const command = new PutItemCommand(params);
   const data = await client.send(command);
-  return data.$metadata.httpStatusCode === 200;
+  if (data?.$metadata?.httpStatusCode !== 200) {
+    throw new Error("Failed to update URL");
+  }
 }
 
 exports.handler = async (event: any) => {
   try {
     const { [FROM_ATTR]: from } = event.pathParameters;
     const to = decodeTo(event.body);
-    const result = await putUrl(from, to);
-    if (!result) {
-      throw new Error("Failed to update URL");
-    }
+    await putUrl(from, to);
     return { statusCode: 200, body: "OK" };
   } catch (err) {
     console.error(err);
