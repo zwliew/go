@@ -6,19 +6,31 @@ const {
   PARTITION_KEY,
   FROM_ATTR,
   TO_ATTR,
+  MIN_FROM_LENGTH: MIN_FROM_LENGTH_STR,
 } = process.env as { [key: string]: string };
 
+const MIN_FROM_LENGTH = +MIN_FROM_LENGTH_STR;
 const client = new DynamoDBClient({ region: AWS_REGION });
 
-function decodeTo(body: string) {
-  const decoded = Buffer.from(body, "base64").toString();
+class UserError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+function decodeTo(encoded: string) {
+  const decoded = Buffer.from(encoded, "base64").toString();
   if (!decoded.startsWith(TO_ATTR)) {
     throw new Error("Invalid body");
   }
   const encodedUri = decoded.slice(TO_ATTR.length + 1);
   const decodedUri = decodeURIComponent(encodedUri);
-  const url = new URL(decodedUri);
-  return url.toString();
+  try {
+    const url = new URL(decodedUri);
+    return url.toString();
+  } catch (err) {
+    throw new UserError("Invalid long URL");
+  }
 }
 
 async function putUrl(from: string, to: string) {
@@ -36,17 +48,34 @@ async function putUrl(from: string, to: string) {
   }
 }
 
+function ensureFromIsValid(from: string) {
+  const VALID_CHARS = /^[\w]*$/;
+  const valid = from.length >= MIN_FROM_LENGTH && VALID_CHARS.test(from);
+  if (!valid) {
+    throw new UserError("Invalid short URL");
+  }
+}
+
 exports.handler = async (event: any) => {
   try {
-    const { [FROM_ATTR]: from } = event.pathParameters;
+    const from = event?.pathParameters?.[FROM_ATTR];
+    ensureFromIsValid(from);
     const to = decodeTo(event.body);
     await putUrl(from, to);
     return { statusCode: 200, body: "OK" };
   } catch (err) {
     console.error(err);
+
+    if (err instanceof UserError) {
+      return {
+        statusCode: 400,
+        body: err.message,
+      };
+    }
+
     return {
-      statusCode: 400,
-      body: "Bad Request",
+      statusCode: 500,
+      body: err.message,
     };
   }
 };
